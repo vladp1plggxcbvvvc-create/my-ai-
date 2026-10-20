@@ -31,7 +31,7 @@ def chat():
     try:
         # Вызываем Gemini с включенным инструментом Google Search (поиск в интернете)
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite", # Бесплатная и быстрая модель
+            model="gemini-3.5-flash-lite", # Бесплатная и быстрая модель
             contents=user_message,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())]
