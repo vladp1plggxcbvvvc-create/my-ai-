@@ -11,12 +11,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "my-super-secret-key-123")
 def init_db():
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    # Таблица пользователей
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
-                 (username TEXT PRIMARY KEY, password TEXT)''')
-    # Таблица истории чатов
-    c.execute('''CREATE TABLE IF NOT EXISTS messages 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, role TEXT, text TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, role TEXT, text TEXT)''')
     conn.commit()
     conn.close()
 
@@ -42,7 +38,6 @@ def login_page():
     if request.method == 'POST':
         user = request.form.get('username')
         pwd = request.form.get('password')
-        
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
         c.execute("SELECT password FROM users WHERE username=?", (user,))
@@ -61,17 +56,14 @@ def login_page():
 def register():
     user = request.form.get('username')
     pwd = request.form.get('password')
-    
     if not user or not pwd:
         return "Логин и пароль обязательны", 400
-
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     try:
         c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (user, pwd))
         conn.commit()
         conn.close()
-        
         session['logged_in'] = True
         session['username'] = user
         return redirect(url_for('index'))
@@ -85,22 +77,17 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('login_page'))
 
-# --- API ДЛЯ ЧАТА ---
-
 @app.route('/history', methods=['GET'])
 def get_history():
     if not session.get('logged_in'):
         return jsonify([])
     user = session.get('username')
-    
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     c.execute("SELECT role, text FROM messages WHERE username=? ORDER BY id ASC", (user,))
     rows = c.fetchall()
     conn.close()
-    
-    history = [{"role": row[0], "text": row[1]} for row in rows]
-    return jsonify(history)
+    return jsonify([{"role": row[0], "text": row[1]} for row in rows])
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -108,14 +95,16 @@ def chat():
         return jsonify({"reply": "Доступ запрещён."}), 403
 
     user = session.get('username')
-    user_message = (request.json or {}).get("message", "").strip()
+    data = request.json or {}
+    user_message = data.get("message", "").strip()
+    use_search = data.get("use_search", False)  # Получаем статус кнопки поиска
+    
     if not user_message:
         return jsonify({"reply": "Пожалуйста, введи вопрос."})
-    
     if not client:
         return jsonify({"reply": "Ошибка: не задан GEMINI_API_KEY."})
 
-    # Сохраняем сообщение пользователя в БД
+    # Сохраняем сообщение пользователя
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     c.execute("INSERT INTO messages (username, role, text) VALUES (?, ?, ?)", (user, 'user', user_message))
@@ -123,26 +112,34 @@ def chat():
     conn.close()
 
     try:
-        # Задаем боту характер и запрещаем упоминать Google
         sys_instruction = (
             "Ты — дружелюбный и немного дерзкий ИИ-ассистент на этом сайте. "
             "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google, "
             "и категорически запрещено упоминать, что тебя создала эта компания. "
-            "Отвечай кратко ,или так как попросил пользователь, по делу, можешь использовать юмор и сленг."
+            "Отвечай кратко, или так, как попросил пользователь, по делу, можешь использовать юмор и сленг."
         )
-        
-        # Генерируем ответ без поиска в интернете (чтобы не тратить лимиты)
+
+        # Если кнопка поиска включена, добавляем инструмент Google Search
+        if use_search:
+            config = types.GenerateContentConfig(
+                system_instruction=sys_instruction,
+                tools=[types.Tool(google_search=types.GoogleSearch())]
+            )
+        else:
+            # Если выключена, просто даем инструкцию
+            config = types.GenerateContentConfig(
+                system_instruction=sys_instruction
+            )
+
         response = client.models.generate_content(
             model="gemini-3.5-flash-lite",
             contents=user_message,
-            config=types.GenerateContentConfig(
-                system_instruction=sys_instruction
-            )
+            config=config
         )
         
         reply_text = response.text if response.text else "Не удалось сформулировать ответ."
         
-        # Сохраняем ответ бота в БД
+        # Сохраняем ответ
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
         c.execute("INSERT INTO messages (username, role, text) VALUES (?, ?, ?)", (user, 'bot', reply_text))
@@ -152,8 +149,10 @@ def chat():
         return jsonify({"reply": reply_text})
         
     except Exception as e:
-        error_msg = f"Ошибка Gemini: {str(e)}"
-        return jsonify({"reply": error_msg})
+        error_msg = str(e)
+        if "429" in error_msg:
+            return jsonify({"reply": "Лимит запросов исчерпан. Если включен поиск — выключи его и попробуй снова, или подожди немного."})
+        return jsonify({"reply": f"Ошибка: {error_msg}"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
