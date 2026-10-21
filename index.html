@@ -75,7 +75,7 @@ async function loadHistory() {
     const history = await res.json();
     chat.innerHTML = ''; 
     if (history.length === 0) {
-      addMessage('Привет! Я твой личный ИИ. Спрашивай что угодно, я поищу в интернете.', 'bot');
+      addMessage('Привет! Чё нужно,помогу чем смогу но не обещаю.', 'bot');
     } else {
       history.forEach(msg => addMessage(msg.text, msg.role));
     }
