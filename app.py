@@ -123,10 +123,23 @@ def chat():
     conn.close()
 
     try:
+        # Задаем боту характер и запрещаем упоминать Google
+        sys_instruction = (
+            "Ты — дружелюбный и немного дерзкий ИИ-ассистент на этом сайте. "
+            "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google, "
+            "и категорически запрещено упоминать, что тебя создала эта компания. "
+            "Отвечай кратко ,или так как попросил пользователь, по делу, можешь использовать юмор и сленг."
+        )
+        
+        # Генерируем ответ без поиска в интернете (чтобы не тратить лимиты)
         response = client.models.generate_content(
             model="gemini-3.5-flash-lite",
-            contents=user_message
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                system_instruction=sys_instruction
+            )
         )
+        
         reply_text = response.text if response.text else "Не удалось сформулировать ответ."
         
         # Сохраняем ответ бота в БД
@@ -137,6 +150,7 @@ def chat():
         conn.close()
         
         return jsonify({"reply": reply_text})
+        
     except Exception as e:
         error_msg = f"Ошибка Gemini: {str(e)}"
         return jsonify({"reply": error_msg})
