@@ -125,10 +125,7 @@ def chat():
     try:
         response = client.models.generate_content(
             model="gemini-3.5-flash-lite",
-            contents=user_message,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())]
-            )
+            contents=user_message
         )
         reply_text = response.text if response.text else "Не удалось сформулировать ответ."
         
