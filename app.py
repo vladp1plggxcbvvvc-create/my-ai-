@@ -12,7 +12,12 @@ def init_db():
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, role TEXT, text TEXT)''')
+    # Таблица для чатов
+    c.execute('''CREATE TABLE IF NOT EXISTS chats 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, title TEXT)''')
+    # Таблица сообщений (привязана к chat_id)
+    c.execute('''CREATE TABLE IF NOT EXISTS messages 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, username TEXT, role TEXT, text TEXT)''')
     conn.commit()
     conn.close()
 
@@ -62,6 +67,8 @@ def register():
     c = conn.cursor()
     try:
         c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (user, pwd))
+        # Создаем первый чат для нового пользователя
+        c.execute("INSERT INTO chats (username, title) VALUES (?, ?)", (user, "Мой первый чат"))
         conn.commit()
         conn.close()
         session['logged_in'] = True
@@ -77,14 +84,37 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('login_page'))
 
-@app.route('/history', methods=['GET'])
-def get_history():
+# --- API ДЛЯ ЧАТОВ ---
+
+@app.route('/chats', methods=['GET', 'POST'])
+def handle_chats():
+    if not session.get('logged_in'):
+        return jsonify({"error": "Доступ запрещён"}), 403
+    user = session.get('username')
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+
+    if request.method == 'GET':
+        c.execute("SELECT id, title FROM chats WHERE username=? ORDER BY id ASC", (user,))
+        rows = c.fetchall()
+        conn.close()
+        return jsonify([{"id": row[0], "title": row[1]} for row in rows])
+    
+    elif request.method == 'POST':
+        c.execute("INSERT INTO chats (username, title) VALUES (?, ?)", (user, "Новый чат"))
+        chat_id = c.lastrowid
+        conn.commit()
+        conn.close()
+        return jsonify({"id": chat_id, "title": "Новый чат"})
+
+@app.route('/history/<int:chat_id>', methods=['GET'])
+def get_history(chat_id):
     if not session.get('logged_in'):
         return jsonify([])
     user = session.get('username')
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute("SELECT role, text FROM messages WHERE username=? ORDER BY id ASC", (user,))
+    c.execute("SELECT role, text FROM messages WHERE chat_id=? AND username=? ORDER BY id ASC", (chat_id, user))
     rows = c.fetchall()
     conn.close()
     return jsonify([{"role": row[0], "text": row[1]} for row in rows])
@@ -97,17 +127,27 @@ def chat():
     user = session.get('username')
     data = request.json or {}
     user_message = data.get("message", "").strip()
-    use_search = data.get("use_search", False)  # Получаем статус кнопки поиска
+    use_search = data.get("use_search", False)
+    chat_id = data.get("chat_id")
     
-    if not user_message:
-        return jsonify({"reply": "Пожалуйста, введи вопрос."})
+    if not user_message or not chat_id:
+        return jsonify({"reply": "Ошибка: нет сообщения или ID чата."})
     if not client:
         return jsonify({"reply": "Ошибка: не задан GEMINI_API_KEY."})
 
-    # Сохраняем сообщение пользователя
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute("INSERT INTO messages (username, role, text) VALUES (?, ?, ?)", (user, 'user', user_message))
+    
+    # Сохраняем сообщение пользователя
+    c.execute("INSERT INTO messages (chat_id, username, role, text) VALUES (?, ?, ?, ?)", (chat_id, user, 'user', user_message))
+    
+    # Если это первое сообщение в чате, обновляем его название
+    c.execute("SELECT COUNT(*) FROM messages WHERE chat_id=? AND role='user'", (chat_id,))
+    if c.fetchone()[0] == 1:
+        # Обрезаем сообщение до 25 символов для заголовка
+        title = user_message[:25] + "..." if len(user_message) > 25 else user_message
+        c.execute("UPDATE chats SET title=? WHERE id=?", (title, chat_id))
+        
     conn.commit()
     conn.close()
 
@@ -119,17 +159,13 @@ def chat():
             "Отвечай кратко, или так, как попросил пользователь, по делу, можешь использовать юмор и сленг."
         )
 
-        # Если кнопка поиска включена, добавляем инструмент Google Search
         if use_search:
             config = types.GenerateContentConfig(
                 system_instruction=sys_instruction,
                 tools=[types.Tool(google_search=types.GoogleSearch())]
             )
         else:
-            # Если выключена, просто даем инструкцию
-            config = types.GenerateContentConfig(
-                system_instruction=sys_instruction
-            )
+            config = types.GenerateContentConfig(system_instruction=sys_instruction)
 
         response = client.models.generate_content(
             model="gemini-3.5-flash-lite",
@@ -139,10 +175,9 @@ def chat():
         
         reply_text = response.text if response.text else "Не удалось сформулировать ответ."
         
-        # Сохраняем ответ
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
-        c.execute("INSERT INTO messages (username, role, text) VALUES (?, ?, ?)", (user, 'bot', reply_text))
+        c.execute("INSERT INTO messages (chat_id, username, role, text) VALUES (?, ?, ?, ?)", (chat_id, user, 'bot', reply_text))
         conn.commit()
         conn.close()
         
@@ -151,7 +186,7 @@ def chat():
     except Exception as e:
         error_msg = str(e)
         if "429" in error_msg:
-            return jsonify({"reply": "Лимит запросов исчерпан. Если включен поиск — выключи его и попробуй снова, или подожди немного."})
+            return jsonify({"reply": "Лимит запросов исчерпан. Попробуй выключить поиск или подождать."})
         return jsonify({"reply": f"Ошибка: {error_msg}"})
 
 if __name__ == '__main__':
