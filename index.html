@@ -165,7 +165,7 @@ async function selectChat(id) {
     const res = await fetch(`/history/${id}`);
     const history = await res.json();
     if (history.length === 0) {
-      addMessage('Привет! Я Зенит. Чем помочь?', 'bot');
+      addMessage('Привет! Я Зенит. Чем помочь? Но не трать много лимитов, они быстро кончатся, если будешь постоянно со мной болтать :)', 'bot');
     } else {
       history.forEach(msg => addMessage(msg.text, msg.role));
     }
