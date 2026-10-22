@@ -10,22 +10,36 @@
   :root { 
     --bg: #f8fafc; --primary: #4f46e5; --text-main: #1e293b; --text-muted: #64748b;
     --bot-bg: #ffffff; --border: #e2e8f0; --input-bg: #ffffff;
+    --sidebar-bg: #f1f5f9; --sidebar-hover: #e2e8f0;
   }
   
   [data-theme="dark"] { 
     --bg: #0f172a; --primary: #6366f1; --text-main: #f8fafc; --text-muted: #94a3b8;
     --bot-bg: #1e293b; --border: #334155; --input-bg: #1e293b;
+    --sidebar-bg: #0b1121; --sidebar-hover: #1e293b;
   }
 
-  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text-main); margin: 0; display: flex; justify-content: center; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
-  .container { width: 100%; max-width: 900px; display: flex; flex-direction: column; background: var(--bg); height: 100%; transition: background 0.3s; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text-main); margin: 0; display: flex; height: 100vh; overflow: hidden; transition: background 0.3s; }
+  
+  /* БОКОВАЯ ПАНЕЛЬ */
+  .sidebar { width: 260px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: background 0.3s; }
+  .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
+  .new-chat-btn { width: 100%; padding: 0.8rem; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; gap: 5px; }
+  .new-chat-btn:hover { background: #4338ca; }
+  
+  .chat-list { flex: 1; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
+  .chat-item { padding: 0.8rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
+  .chat-item:hover { background: var(--sidebar-hover); }
+  .chat-item.active { background: var(--primary); color: white; }
+  
+  /* ОСНОВНОЙ ЧАТ */
+  .main-chat { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
   
   .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; background: var(--bot-bg); border-bottom: 1px solid var(--border); }
   .logo { font-weight: 600; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
   .user-info { display: flex; align-items: center; gap: 1rem; }
   .theme-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 0.4rem; border-radius: 50%; transition: 0.2s; }
   .theme-btn:hover { background: var(--border); }
-  .username { font-weight: 500; background: var(--border); padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.9rem; }
   .logout-btn { text-decoration: none; color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
   .logout-btn:hover { color: #ef4444; }
   
@@ -39,22 +53,12 @@
   .user .msg { background: var(--primary); color: white; border-bottom-right-radius: 4px; box-shadow: 0 4px 15px rgba(79,70,229,0.2); }
   .bot .msg { background: var(--bot-bg); color: var(--text-main); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
   
-  /* Поле ввода */
   .input-area { padding: 1.5rem 2rem; background: var(--bot-bg); border-top: 1px solid var(--border); display: flex; gap: 0.5rem; align-items: center; }
   input { flex: 1; padding: 1rem 1.5rem; border: 2px solid var(--border); border-radius: 24px; font-size: 1rem; outline: none; background: var(--input-bg); color: var(--text-main); transition: 0.2s; }
   input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(79,70,229,0.1); }
   
-  /* Кнопка поиска */
-  .search-btn { 
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-    padding: 0 1rem; height: 48px; border: 2px solid var(--border); background: transparent; 
-    color: var(--text-muted); border-radius: 24px; font-size: 0.95rem; font-weight: 600; 
-    cursor: pointer; transition: 0.3s; font-family: 'Inter', sans-serif;
-  }
-  .search-btn.active { 
-    background: #10b981; color: white; border-color: #10b981; 
-    box-shadow: 0 4px 12px rgba(16,185,129,0.3);
-  }
+  .search-btn { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 0 1rem; height: 48px; border: 2px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: 0.3s; font-family: 'Inter', sans-serif; }
+  .search-btn.active { background: #10b981; color: white; border-color: #10b981; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
 
   button.send-btn { padding: 0 1.5rem; height: 48px; background: var(--primary); color: white; border: none; border-radius: 24px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
   button.send-btn:hover { background: #4338ca; transform: translateY(-1px); }
@@ -64,12 +68,23 @@
 </style>
 </head>
 <body>
-<div class="container">
+
+<!-- БОКОВАЯ ПАНЕЛЬ -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <button class="new-chat-btn" onclick="createNewChat()">➕ Новый чат</button>
+  </div>
+  <div class="chat-list" id="chatList">
+    <!-- Сюда будут загружаться чаты -->
+  </div>
+</div>
+
+<!-- ОСНОВНОЙ ЧАТ -->
+<div class="main-chat">
   <div class="header">
     <div class="logo">🤖 Зенит</div>
     <div class="user-info">
       <button class="theme-btn" id="themeToggle" title="Сменить тему">🌙</button>
-      <span class="username">Вы в системе</span>
       <a href="/logout" class="logout-btn">Выйти</a>
     </div>
   </div>
@@ -77,14 +92,12 @@
   <div class="chat-box" id="chat">
     <div class="msg-row bot">
       <div class="avatar">🤖</div>
-      <div class="msg">Привет! Чё нужно, помогу чем смогу но не обещаю. Если нужно найти что-то в интернете, нажми на кнопку поиска внизу.</div>
+      <div class="msg">Выбери чат слева или создай новый, чтобы начать общение.</div>
     </div>
   </div>
   
   <div class="input-area">
-    <button class="search-btn" id="searchToggle" title="Включить/выключить поиск в интернете">
-      🌐 Поиск: Выкл
-    </button>
+    <button class="search-btn" id="searchToggle" title="Включить/выключить поиск в интернете">🌐 Поиск: Выкл</button>
     <input id="input" placeholder="Напиши сообщение..." onkeydown="if(event.key==='Enter') send()">
     <button class="send-btn" id="sendBtn" onclick="send()">➤</button>
   </div>
@@ -104,6 +117,68 @@ themeToggle.addEventListener('click', () => {
   themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
 });
 
+// --- ЛОГИКА ЧАТОВ ---
+let currentChatId = null;
+const chatList = document.getElementById('chatList');
+
+async function loadChats() {
+  try {
+    const res = await fetch('/chats');
+    const chats = await res.json();
+    chatList.innerHTML = '';
+    
+    if (chats.length === 0) {
+      await createNewChat();
+      return;
+    }
+
+    chats.forEach(chat => {
+      const div = document.createElement('div');
+      div.className = 'chat-item' + (chat.id === currentChatId ? ' active' : '');
+      div.innerHTML = `💬 ${chat.title}`;
+      div.onclick = () => selectChat(chat.id);
+      chatList.appendChild(div);
+    });
+  } catch (e) {
+    console.error("Ошибка загрузки чатов", e);
+  }
+}
+
+async function createNewChat() {
+  try {
+    const res = await fetch('/chats', { method: 'POST' });
+    const newChat = await res.json();
+    currentChatId = newChat.id;
+    await loadChats();
+    selectChat(currentChatId);
+  } catch (e) {
+    console.error("Ошибка создания чата", e);
+  }
+}
+
+async function selectChat(id) {
+  currentChatId = id;
+  // Обновляем активный класс в списке
+  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+  loadChats(); // Перерисовываем список, чтобы подсветить нужный
+  
+  // Загружаем историю
+  const chatBox = document.getElementById('chat');
+  chatBox.innerHTML = '';
+  
+  try {
+    const res = await fetch(`/history/${id}`);
+    const history = await res.json();
+    if (history.length === 0) {
+      addMessage('Привет! Я Зенит. Чем помочь?', 'bot');
+    } else {
+      history.forEach(msg => addMessage(msg.text, msg.role));
+    }
+  } catch (e) {
+    addMessage('Ошибка загрузки истории.', 'bot');
+  }
+}
+
 // --- ЛОГИКА ПОИСКА ---
 const searchToggle = document.getElementById('searchToggle');
 let useSearch = false;
@@ -119,7 +194,7 @@ searchToggle.addEventListener('click', () => {
   }
 });
 
-// --- ЛОГИКА ЧАТА ---
+// --- ОТПРАВКА СООБЩЕНИЙ ---
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const btn = document.getElementById('sendBtn');
@@ -142,7 +217,7 @@ function addMessage(text, type) {
 
 async function send() {
   const text = input.value.trim();
-  if (!text) return;
+  if (!text || !currentChatId) return;
   input.value = '';
   addMessage(text, 'user');
   btn.disabled = true;
@@ -155,11 +230,14 @@ async function send() {
     const res = await fetch('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, use_search: useSearch }) // Передаем статус поиска
+      body: JSON.stringify({ message: text, use_search: useSearch, chat_id: currentChatId })
     });
     const data = await res.json();
     chat.removeChild(loadingRow);
     addMessage(data.reply, 'bot');
+    
+    // Обновляем список чатов (вдруг название сменилось)
+    loadChats(); 
   } catch (e) {
     chat.removeChild(loadingRow);
     addMessage('Ошибка соединения с сервером.', 'bot');
@@ -169,6 +247,15 @@ async function send() {
     input.focus();
   }
 }
+
+// Инициализация при загрузке
+window.onload = () => {
+  loadChats().then(() => {
+    // Если чатов нет, создаем первый
+    if (!currentChatId) createNewChat();
+    else selectChat(currentChatId); // Или выбираем первый из списка
+  });
+};
 </script>
 </body>
 </html>
