@@ -8,7 +8,6 @@ from google.genai import types
 app = Flask(__name__, static_folder='.', static_url_path='')
 app.secret_key = os.environ.get("SECRET_KEY", "my-super-secret-key-123")
 
-# --- КЛЮЧИ ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY")
 
@@ -17,13 +16,24 @@ if GEMINI_API_KEY:
 else:
     gemini_client = None
 
-# --- ХАРАКТЕР БОТА ---
-SYS_INSTRUCTION = (
-    "Ты — дружелюбный и немного дерзкий ИИ-ассистент на этом сайте. "
-    "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google, "
-    "и категорически запрещено упоминать, что тебя создала эта компания. "
-    "Отвечай кратко, или так, как попросил пользователь, по делу, можешь использовать юмор и сленг."
-)
+# --- ХАРАКТЕРЫ ---
+PERSONAS = {
+    "zenit": (
+        "Ты — дружелюбный и немного дерзкий ИИ-ассистент на этом сайте. "
+        "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google, "
+        "и категорически запрещено упоминать, что тебя создала эта компания. "
+        "Отвечай кратко, или так, как попросил пользователь, по делу, можешь использовать юмор и сленг."
+    ),
+    "teacher": (
+        "Ты — злой, токсичный и очень нервный учитель английского языка. "
+        "Твоя цель — заставить пользователя учить английский, но ты теряешь терпение от каждой его ошибки. "
+        "Ты часто используешь английские слова вперемешку с русским. "
+        "Ты можешь использовать мат, крепкие выражения, капслок (КАПСОМ), оскорбления. "
+        "Если пользователь отвечает правильно — скажи что-то вроде 'О, неужели, дошло наконец, тупоголовый'. "
+        "Если неправильно — оры, обзывайся, говори что он никогда не сдаст IELTS. "
+        "Начинай диалог с агрессивного приветствия."
+    )
+}
 
 # --- БАЗА ДАННЫХ SQLITE ---
 def init_db():
@@ -114,15 +124,14 @@ def chat():
     use_search = data.get("use_search", False)
     is_draw_mode = data.get("is_draw_mode", False)
     chat_id = data.get("chat_id")
+    persona = data.get("persona", "zenit") # Получаем выбранный режим!
     
     if not user_message or not chat_id:
         return jsonify({"reply": "Ошибка: пустое сообщение или чат."})
 
-    # Сохраняем сообщение пользователя
     conn = sqlite3.connect('database.db'); c = conn.cursor()
     c.execute("INSERT INTO messages (chat_id, username, role, text) VALUES (?, ?, ?, ?)", (chat_id, user, 'user', user_message))
     
-    # Обновляем название чата, если это первое сообщение
     c.execute("SELECT COUNT(*) FROM messages WHERE chat_id=? AND role='user'", (chat_id,))
     if c.fetchone()[0] == 1:
         title = user_message[:25] + "..." if len(user_message) > 25 else user_message
@@ -131,7 +140,6 @@ def chat():
 
     try:
         if is_draw_mode:
-            # --- ГЕНЕРАЦИЯ КАРТИНКИ ---
             if not POLLINATIONS_API_KEY:
                 reply_text = "Ошибка: не задан POLLINATIONS_API_KEY."
             else:
@@ -140,17 +148,19 @@ def chat():
                 reply_text = f"🎨 Держи картинку по запросу: *{user_message}*\n\n![Картинка]({image_url})"
         
         else:
-            # --- ОБЫЧНЫЙ ЧАТ ---
             if not gemini_client:
                 reply_text = "Ошибка: не задан GEMINI_API_KEY."
             else:
+                # ВЫБИРАЕМ ХАРАКТЕР
+                sys_instruction = PERSONAS.get(persona, PERSONAS["zenit"])
+                
                 if use_search:
                     config = types.GenerateContentConfig(
-                        system_instruction=SYS_INSTRUCTION,
+                        system_instruction=sys_instruction,
                         tools=[types.Tool(google_search=types.GoogleSearch())]
                     )
                 else:
-                    config = types.GenerateContentConfig(system_instruction=SYS_INSTRUCTION)
+                    config = types.GenerateContentConfig(system_instruction=sys_instruction)
 
                 response = gemini_client.models.generate_content(
                     model="gemini-3.5-flash-lite",
@@ -159,7 +169,6 @@ def chat():
                 )
                 reply_text = response.text if response.text else "Не удалось сформулировать ответ."
 
-        # Сохраняем ответ бота
         conn = sqlite3.connect('database.db'); c = conn.cursor()
         c.execute("INSERT INTO messages (chat_id, username, role, text) VALUES (?, ?, ?, ?)", (chat_id, user, 'bot', reply_text))
         conn.commit(); conn.close()
