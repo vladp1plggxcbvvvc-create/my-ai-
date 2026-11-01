@@ -26,6 +26,11 @@
   .theme-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; }
   .logout-btn { text-decoration: none; color: var(--text-muted); font-size: 0.9rem; }
   .logout-btn:hover { color: #ef4444; }
+
+  /* Переключатель режимов */
+  .mode-selector { display: flex; gap: 5px; background: var(--sidebar-hover); padding: 3px; border-radius: 12px; margin-right: 10px; }
+  .mode-btn { padding: 0.4rem 0.8rem; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: 0.2s; }
+  .mode-btn.active { background: var(--bot-bg); color: var(--text-main); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
   
   /* --- ПЕРСОНАЖ (АВАТАР) --- */
   .teacher-container {
@@ -38,14 +43,17 @@
   .teacher-avatar {
     width: 80px;
     height: 80px;
-    /* Вставь сюда ссылку на картинку учителя */
-    background-image: url('https://i.pinimg.com/736x/8c/94/74/8c94746b3e2800e6e2a1e3d4d4e3e5b0.jpg'); 
+    background-image: url('https://i.pinimg.com/736x/8c/94/74/8c94746b3e2800e6e2a1e3d4d4e3e5b0.jpg'); /* ЗЕНИТ */
     background-size: cover;
     background-position: center;
     border-radius: 50%;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    transition: transform 0.1s;
+    transition: transform 0.1s, background-image 0.3s;
     border: 3px solid var(--primary);
+  }
+  .teacher-avatar.teacher-mode {
+    background-image: url('https://i.pinimg.com/736x/3a/9d/8e/3a9d8ee1b2a19c5b3e2f8e6e9d1c3a5d.jpg'); /* УЧИТЕЛЬ */
+    border-color: #ef4444;
   }
   .teacher-avatar.speaking {
     animation: talk 0.15s infinite alternate;
@@ -88,14 +96,17 @@
 </div>
 <div class="main-chat">
   <div class="header">
-    <div class="logo">🤖 Зенит</div>
+    <div class="logo">🤖 ИИ-Ассистент</div>
     <div class="user-info">
+      <div class="mode-selector">
+        <button class="mode-btn active" id="btnZenit" onclick="setMode('zenit')">Зенит</button>
+        <button class="mode-btn" id="btnTeacher" onclick="setMode('teacher')">Учитель</button>
+      </div>
       <button class="theme-btn" id="themeToggle">🌙</button>
       <a href="/logout" class="logout-btn">Выйти</a>
     </div>
   </div>
   
-  <!-- ПЕРСОНАЖ -->
   <div class="teacher-container">
       <div class="teacher-avatar" id="teacherAvatar"></div>
   </div>
@@ -126,6 +137,25 @@ themeToggle.addEventListener('click', () => {
   themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
 });
 
+// --- ЛОГИКА РЕЖИМОВ ---
+let currentPersona = "zenit";
+const teacherAvatar = document.getElementById('teacherAvatar');
+const btnZenit = document.getElementById('btnZenit');
+const btnTeacher = document.getElementById('btnTeacher');
+
+function setMode(mode) {
+  currentPersona = mode;
+  if (mode === 'teacher') {
+    btnTeacher.classList.add('active');
+    btnZenit.classList.remove('active');
+    teacherAvatar.classList.add('teacher-mode');
+  } else {
+    btnZenit.classList.add('active');
+    btnTeacher.classList.remove('active');
+    teacherAvatar.classList.remove('teacher-mode');
+  }
+}
+
 // --- ЛОГИКА ЧАТОВ ---
 let currentChatId = null;
 const chatList = document.getElementById('chatList');
@@ -151,7 +181,7 @@ async function selectChat(id) {
   currentChatId = id; await loadChats();
   const chatBox = document.getElementById('chat'); chatBox.innerHTML = '';
   const res = await fetch(`/history/${id}`); const history = await res.json();
-  if (history.length === 0) addMessage('Привет! Выбери режим и напиши что-нибудь.', 'bot');
+  if (history.length === 0) addMessage('Привет! Выбери режим (Зенит или Учитель) и напиши что-нибудь.', 'bot');
   else history.forEach(msg => addMessage(msg.text, msg.role));
 }
 
@@ -222,24 +252,37 @@ function addMessage(text, type) {
   return row;
 }
 
-// --- ФУНКЦИЯ ОЗВУЧКИ ---
+// --- ФУНКЦИЯ ОЗВУЧКИ (ЗЛАЯ ВЕРСИЯ) ---
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     
-    // Убираем markdown-разметку из текста (чтобы не читал звездочки)
-    const cleanText = text.replace(/[*#_]/g, '').replace(/!\[.*?\]\(.*?\)/g, 'Картинка');
+    // Очищаем от markdown
+    let cleanText = text.replace(/[*#_]/g, '').replace(/!\[.*?\]\(.*?\)/g, 'Картинка');
     
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    const utterance = new SpeechSynthesisUtterance();
     utterance.lang = 'ru-RU';
-    utterance.pitch = 0.5; // Пониже тон
-    utterance.rate = 1.3;  // Чуть быстрее
+
+    // РАЗНЫЕ РЕЖИМЫ
+    if (currentPersona === 'teacher') {
+        // Делаем текст агрессивнее: меняем точки на восклицания
+        cleanText = cleanText.replace(/\./g, '! ');
+        
+        // Рандомизируем тон и скорость для эффекта "задыхается от злости"
+        utterance.pitch = 0.3 + Math.random() * 0.2; // Низкий и дрожащий
+        utterance.rate = 1.4 + Math.random() * 0.3;  // Очень быстрый
+        utterance.volume = 1.0; // Максимальная громкость
+    } else {
+        utterance.pitch = 0.9;
+        utterance.rate = 1.0;
+    }
+
+    utterance.text = cleanText;
 
     const voices = window.speechSynthesis.getVoices();
     const russianMaleVoice = voices.find(v => v.lang.startsWith('ru') && (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('yuri') || v.name.toLowerCase().includes('pavel')));
     if (russianMaleVoice) utterance.voice = russianMaleVoice;
 
-    const teacherAvatar = document.getElementById('teacherAvatar');
     if (teacherAvatar) {
         utterance.onstart = () => teacherAvatar.classList.add('speaking');
         utterance.onend = () => teacherAvatar.classList.remove('speaking');
@@ -254,7 +297,7 @@ async function send() {
   input.value = ''; addMessage(text, 'user');
   btn.disabled = true; searchToggle.disabled = true; drawToggle.disabled = true;
   
-  const loadingText = isDrawMode ? 'Рисую...' : (useSearch ? 'Ищу в интернете...' : 'Зенит думает...');
+  const loadingText = isDrawMode ? 'Рисую...' : (useSearch ? 'Ищу в интернете...' : 'Думаю...');
   const loadingRow = addMessage(loadingText, 'bot');
   
   try {
@@ -264,7 +307,8 @@ async function send() {
           message: text, 
           use_search: useSearch, 
           is_draw_mode: isDrawMode, 
-          chat_id: currentChatId 
+          chat_id: currentChatId,
+          persona: currentPersona
       })
     });
     const data = await res.json();
