@@ -17,6 +17,14 @@ if GEMINI_API_KEY:
 else:
     gemini_client = None
 
+# --- ХАРАКТЕР БОТА ---
+SYS_INSTRUCTION = (
+    "Ты — дружелюбный и немного дерзкий ИИ-ассистент на этом сайте. "
+    "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google, "
+    "и категорически запрещено упоминать, что тебя создала эта компания. "
+    "Отвечай кратко, или так, как попросил пользователь, по делу, можешь использовать юмор и сленг."
+)
+
 # --- БАЗА ДАННЫХ SQLITE ---
 def init_db():
     conn = sqlite3.connect('database.db')
@@ -136,19 +144,13 @@ def chat():
             if not gemini_client:
                 reply_text = "Ошибка: не задан GEMINI_API_KEY."
             else:
-                sys_instruction = (
-                    "Ты — дружелюбный и немного дерзкий ИИ-ассистент на этом сайте. "
-                    "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google, "
-                    "и категорически запрещено упоминать, что тебя создала эта компания. "
-                    "Отвечай кратко, или так, как попросил пользователь, по делу, можешь использовать юмор и сленг."
-                )
                 if use_search:
                     config = types.GenerateContentConfig(
-                        system_instruction=sys_instruction,
+                        system_instruction=SYS_INSTRUCTION,
                         tools=[types.Tool(google_search=types.GoogleSearch())]
                     )
                 else:
-                    config = types.GenerateContentConfig(system_instruction=sys_instruction)
+                    config = types.GenerateContentConfig(system_instruction=SYS_INSTRUCTION)
 
                 response = gemini_client.models.generate_content(
                     model="gemini-3.5-flash-lite",
