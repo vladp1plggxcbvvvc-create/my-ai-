@@ -232,8 +232,8 @@ function speakText(text) {
     
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = 'ru-RU';
-    utterance.pitch = 0.8; // Пониже тон
-    utterance.rate = 1.1;  // Чуть быстрее
+    utterance.pitch = 0.5; // Пониже тон
+    utterance.rate = 1.3;  // Чуть быстрее
 
     const voices = window.speechSynthesis.getVoices();
     const russianMaleVoice = voices.find(v => v.lang.startsWith('ru') && (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('yuri') || v.name.toLowerCase().includes('pavel')));
