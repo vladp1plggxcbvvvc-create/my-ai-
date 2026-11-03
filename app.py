@@ -20,18 +20,16 @@ else:
 PERSONAS = {
     "zenit": (
         "Ты — дружелюбный и немного дерзкий ИИ-ассистент на этом сайте. "
-        "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google, "
-        "и категорически запрещено упоминать, что тебя создала эта компания. "
-        "Отвечай кратко, или так, как попросил пользователь, по делу, можешь использовать юмор и сленг."
+        "Твое имя — 'Зенит'. Ты не имеешь никакого отношения к Google. "
+        "Отвечай кратко, по делу, можешь использовать юмор и сленг."
     ),
     "teacher": (
-        "Ты — злой, токсичный и очень нервный учитель английского языка. "
-        "Твоя цель — заставить пользователя учить английский, но ты теряешь терпение от каждой его ошибки. "
+        "Ты — строгий, но справедливый учитель английского языка. "
+        "Твоя задача — проверять знания пользователя. "
+        "Если пользователь отвечает ПРАВИЛЬНО — хвали его (например: 'Молодец, правильно'). "
+        "Если пользователь ошибается — ты ЗЛИШЬСЯ, можешь использовать мат, капслок и оскорбления (называй его тупицей, лентяем). "
         "Ты часто используешь английские слова вперемешку с русским. "
-        "Ты можешь использовать мат, крепкие выражения, капслок (КАПСОМ), оскорбления. "
-        "Если пользователь отвечает правильно — скажи что-то вроде 'О, неужели, дошло наконец, тупоголовый'. "
-        "Если неправильно — оры, обзывайся, говори что он никогда не сдаст IELTS. "
-        "Начинай диалог с агрессивного приветствия."
+        "Начинай диалог с фразы: 'Ну чё, приперся? Садись, проверим твои знания. Переведи слово: apple'."
     )
 }
 
@@ -40,7 +38,7 @@ def init_db():
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, title TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, title TEXT, mode TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, username TEXT, role TEXT, text TEXT)''')
     conn.commit()
     conn.close()
@@ -63,7 +61,7 @@ def login_page():
         if result and result[0] == pwd:
             session['logged_in'] = True; session['username'] = user
             return redirect(url_for('index'))
-        return send_from_directory('.', 'login.html') + "<div style='color:#ef4444; text-align:center;'>Неверный логин или пароль</div>"
+        return send_from_directory('.', 'login.html') + "<div style='color:#ef4444; text-align:center; margin-top:10px;'>Неверный логин или пароль</div>"
     return send_from_directory('.', 'login.html')
 
 @app.route('/register', methods=['POST'])
@@ -73,13 +71,13 @@ def register():
     conn = sqlite3.connect('database.db'); c = conn.cursor()
     try:
         c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (user, pwd))
-        c.execute("INSERT INTO chats (username, title) VALUES (?, ?)", (user, "Чат 1"))
+        c.execute("INSERT INTO chats (username, title, mode) VALUES (?, ?, ?)", (user, "Чат 1", "zenit"))
         conn.commit(); conn.close()
         session['logged_in'] = True; session['username'] = user
         return redirect(url_for('index'))
     except sqlite3.IntegrityError:
         conn.close()
-        return send_from_directory('.', 'login.html') + "<div style='color:#ef4444; text-align:center;'>Этот логин уже занят</div>"
+        return send_from_directory('.', 'login.html') + "<div style='color:#ef4444; text-align:center; margin-top:10px;'>Этот логин уже занят</div>"
 
 @app.route('/logout')
 def logout():
@@ -93,17 +91,19 @@ def handle_chats():
     conn = sqlite3.connect('database.db'); c = conn.cursor()
 
     if request.method == 'GET':
-        c.execute("SELECT id, title FROM chats WHERE username=? ORDER BY id ASC", (user,))
+        c.execute("SELECT id, title, mode FROM chats WHERE username=? ORDER BY id ASC", (user,))
         rows = c.fetchall()
         if not rows:
-            c.execute("INSERT INTO chats (username, title) VALUES (?, ?)", (user, "Чат 1"))
-            conn.commit(); rows = [(c.lastrowid, "Чат 1")]
+            c.execute("INSERT INTO chats (username, title, mode) VALUES (?, ?, ?)", (user, "Чат 1", "zenit"))
+            conn.commit(); rows = [(c.lastrowid, "Чат 1", "zenit")]
         conn.close()
-        return jsonify([{"id": r[0], "title": r[1]} for r in rows])
+        return jsonify([{"id": r[0], "title": r[1], "mode": r[2]} for r in rows])
     else:
-        c.execute("INSERT INTO chats (username, title) VALUES (?, ?)", (user, "Новый чат"))
+        mode = request.json.get("mode", "zenit")
+        title = "Урок английского" if mode == "teacher" else "Новый чат"
+        c.execute("INSERT INTO chats (username, title, mode) VALUES (?, ?, ?)", (user, title, mode))
         chat_id = c.lastrowid; conn.commit(); conn.close()
-        return jsonify({"id": chat_id, "title": "Новый чат"})
+        return jsonify({"id": chat_id, "title": title, "mode": mode})
 
 @app.route('/history/<int:chat_id>', methods=['GET'])
 def get_history(chat_id):
@@ -124,7 +124,7 @@ def chat():
     use_search = data.get("use_search", False)
     is_draw_mode = data.get("is_draw_mode", False)
     chat_id = data.get("chat_id")
-    persona = data.get("persona", "zenit") # Получаем выбранный режим!
+    persona = data.get("persona", "zenit")
     
     if not user_message or not chat_id:
         return jsonify({"reply": "Ошибка: пустое сообщение или чат."})
@@ -145,13 +145,12 @@ def chat():
             else:
                 encoded_prompt = urllib.parse.quote(user_message)
                 image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true&token={POLLINATIONS_API_KEY}"
-                reply_text = f"🎨 Держи картинку по запросу: *{user_message}*\n\n![Картинка]({image_url})"
+                reply_text = f"🎨 Держи картинку: *{user_message}*\n\n![Картинка]({image_url})"
         
         else:
             if not gemini_client:
                 reply_text = "Ошибка: не задан GEMINI_API_KEY."
             else:
-                # ВЫБИРАЕМ ХАРАКТЕР
                 sys_instruction = PERSONAS.get(persona, PERSONAS["zenit"])
                 
                 if use_search:
